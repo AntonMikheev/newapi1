@@ -2,31 +2,19 @@
 
 class UserController extends BaseController {
 
-    public function viewFormRegistration(){
-        return View::make('RegistrForm');
-    }
-
     public function registrationNewUser(){
 
-        $username = Input::get('name');
-        $email = Input::get('email');
-        $password = Input::get('password');
+        $username = Input::json('name');
+        $email = Input::json('email');
+        $password = Input::json('password');
         $hashpass = Hash::make($password);
-        $acceptpassword = Input::get('acceptpassword');
+        $newuser = new User;
+        $newuser->name = $username;
+        $newuser->email = $email;
+        $newuser->password = $hashpass;
+        $newuser->save();
+        return Config::get('testconst.success_add');
 
-        if($password === $acceptpassword){
-            $newuser = new User;
-            $newuser->name = $username;
-            $newuser->email = $email;
-            $newuser->password = $hashpass;
-            $newuser->save();
-
-            return Redirect::route('viewreviews');
-        }
-
-        else {
-            return View::make('RegistrForm');
-        }
     }
 
     public function userLoginForm() {
@@ -35,26 +23,65 @@ class UserController extends BaseController {
 
     public function userLogin() {
 
-        $email =Input::get('email');
-        $password =Input::get('password');
-        $remember = Input::get('rememberme');
-        $rem = "false";
-        if($remember == 1){
-            $rem = "true";
-        }
-//    return $rem;
-        $credentials = array('email' => $email, 'password' => $password);
-        if (Auth::attempt($credentials))
+        $email = Input::json('email');
+        $password = Input::json('password');
+        $logintime = Input::json('logintime');
+        $user = User::whereEmail($email)->first();
+        if(Hash::check($password, $user->password))
         {
-            return Redirect::route('viewreviews');
+            $time = time();
+            $islogin = Hash::make($time.$email);
+            $user->islogin = $islogin;
+            $user->save();
+            if(!isset($logintime)){
+                $user->logintime = time();
+                $user->save();
+                $time = $user->logintime;
+            }
+            else{
+                $user->logintime = NULL;
+                $user->save();
+                $time = $user->logintime;
+            }
+            $msg = Config::get('testconst.success_add');
+            $resp =  array('name' => $user->name,'islogin' =>$user->islogin, 'time' => $time);
+            return Response::json($resp);
         }
-        else {
-            return View::make('UserLoginForm');
+        else{
+            return Config::get('testconst.error_request');
         }
-    }
-    public function userLogout(){
-        Auth::logout();
-        return Redirect::route('viewreviews');
     }
 
+    public function userLogout(){
+        $islogin = Input::json('islogin');
+        $user = User::whereIslogin($islogin)->first();
+        $user->islogin = NULL;
+        $user->logintime = NULL;
+        $user->save();
+        return Config::get('testconst.success_logout');
+    }
+
+    public function isLogin(){
+        $islogin = Input::json('islogin');
+        if(isset($islogin)&&!empty($islogin)) {
+            $user = User::whereIslogin($islogin)->first();
+            if(!empty($user->logintime)) {
+                $time = time();
+                $dif = $time - $user->logintime;
+                $session = 7;
+                if($dif > $session) {
+                    return Config::get('testconst.user_logout');
+                }
+                else{
+                    return Config::get('testconst.user_login');
+                }
+            }
+            else{
+                return Config::get('testconst.user_login');
+            }
+        }
+        else{
+            return Config::get('testconst.user_logout');
+        }
+    }
 }
